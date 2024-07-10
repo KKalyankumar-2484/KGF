@@ -1,0 +1,71 @@
+#4
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense, Flatten
+from tensorflow.keras.callbacks import EarlyStopping
+import matplotlib.pyplot as plt
+
+(X_train, y_train), (X_test, y_test) = cifar10.load_data()
+
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+input_shape = X_train[0].shape
+
+input_layer = Input(shape=input_shape)
+
+flatten_layer = Flatten()(input_layer)
+
+shared_hidden = Dense(64, activation='relu')(flatten_layer)
+
+coarse_output = Dense(10, activation='softmax', name='coarse_output')(shared_hidden)
+
+fine_output = Dense(10, activation='softmax', name='fine_output')(shared_hidden)
+
+model = Model(inputs=input_layer, outputs=[coarse_output, fine_output])
+
+model.compile(optimizer='adam',
+              loss={'coarse_output': 'sparse_categorical_crossentropy', 'fine_output': 'sparse_categorical_crossentropy'},
+              metrics=['accuracy'])
+
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=1, mode='min', restore_best_weights=True)
+
+history = model.fit(X_train, {'coarse_output': y_train, 'fine_output': y_train},
+                    validation_split=0.2, epochs=100, callbacks=[early_stopping])
+
+if early_stopping.stopped_epoch == 0:
+    print("Early stopping did not occur.")
+else:
+    print("Early stopping occurred at epoch:", early_stopping.stopped_epoch + 1)  # Add 1 to get 1-indexed epoch number
+
+coarse_train_loss = history.history['coarse_output_loss']
+coarse_val_loss = history.history['val_coarse_output_loss']
+fine_train_loss = history.history['fine_output_loss']
+fine_val_loss = history.history['val_fine_output_loss']
+
+epochs = range(1, len(coarse_train_loss) + 1)
+
+plt.plot(epochs, coarse_train_loss, label='Coarse Output Training Loss')
+plt.plot(epochs, coarse_val_loss, label='Coarse Output Validation Loss')
+plt.title('Coarse Output Training and Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+if early_stopping.stopped_epoch != 0:
+    plt.axvline(x=early_stopping.stopped_epoch + 1, color='r', linestyle='--', label='Early Stopping')
+plt.legend()
+plt.show()
+
+plt.plot(epochs, fine_train_loss, label='Fine Output Training Loss')
+plt.plot(epochs, fine_val_loss, label='Fine Output Validation Loss')
+plt.title('Fine Output Training and Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+if early_stopping.stopped_epoch != 0:
+    plt.axvline(x=early_stopping.stopped_epoch + 1, color='r', linestyle='--', label='Early Stopping')
+plt.legend()
+plt.show()
+
